@@ -26,7 +26,7 @@ resource "azurerm_storage_blob" "function_zip" {
   storage_account_name   = azurerm_storage_account.st-weatherbot.name
   storage_container_name = azurerm_storage_container.appcontainer.name
   type                   = "Block"
-  source                 = "C:/myproject/botfunction/weatherbot.zip"  # Ensure this path is correct
+  source                 = "C:/myproject/botfunction/weatherbot.zip"  
 }
 
 resource "azurerm_app_service_plan" "pl-weatherbot" {
