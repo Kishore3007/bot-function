@@ -5,28 +5,16 @@ provider "azurerm" {
 
 resource "azurerm_resource_group" "rg-weatherbot" {
   name     = "rg-weatherbot"
-  location = "Central US"
+  location = "East US"
 }
 
+# Create Storage Account for the Function App (Azure Function storage)
 resource "azurerm_storage_account" "st-weatherbot" {
   name                     = "stpythonweatherbot"
   resource_group_name       = azurerm_resource_group.rg-weatherbot.name
   location                 = azurerm_resource_group.rg-weatherbot.location
   account_tier              = "Standard"
   account_replication_type = "LRS"
-}
-
-resource "azurerm_storage_container" "appcontainer" {
-  name                  = "functionappcontainer"
-  storage_account_id    = azurerm_storage_account.st-weatherbot.id
-}
-
-resource "azurerm_storage_blob" "function_zip" {
-  name                   = "weatherbot.zip"
-  storage_account_name   = azurerm_storage_account.st-weatherbot.name
-  storage_container_name = azurerm_storage_container.appcontainer.name
-  type                   = "Block"
-  source                 = "C:/myproject/botfunction/weatherbot.zip"  
 }
 
 resource "azurerm_app_service_plan" "pl-weatherbot" {
@@ -41,6 +29,29 @@ resource "azurerm_app_service_plan" "pl-weatherbot" {
   }
 }
 
+# Create a separate Storage Account for the Blob (code package storage)
+resource "azurerm_storage_account" "st-weatherbot-blob" {
+  name                     = "stpythonweatherblob"
+  resource_group_name       = azurerm_resource_group.rg-weatherbot.name
+  location                 = azurerm_resource_group.rg-weatherbot.location
+  account_tier              = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_storage_container" "appcontainer" {
+  name                  = "functionappcontainer"
+  storage_account_id    = azurerm_storage_account.st-weatherbot-blob.id
+}
+
+# Upload the Function App ZIP file to the Blob Storage Container
+resource "azurerm_storage_blob" "function_zip" {
+  name                   = "weatherbot.zip"
+  storage_account_name   = azurerm_storage_account.st-weatherbot-blob.name
+  storage_container_name = azurerm_storage_container.appcontainer.name
+  type                   = "Block"
+  source                 = "C:/myproject/botfunction/weatherbot.zip"
+}
+
 resource "azurerm_function_app" "pythonweatherbot" {
   name                       = "my-python-weatherbot"
   location                   = azurerm_resource_group.rg-weatherbot.location
@@ -53,14 +64,18 @@ resource "azurerm_function_app" "pythonweatherbot" {
 
   app_settings = {
     FUNCTIONS_WORKER_RUNTIME = "python"
-    WEBSITE_RUN_FROM_PACKAGE = "https://${azurerm_storage_account.st-weatherbot.name}.blob.core.windows.net/${azurerm_storage_container.appcontainer.name}/weatherbot.zip?${azurerm_storage_account.st-weatherbot.primary_access_key}"
+    WEBSITE_RUN_FROM_PACKAGE = "https://${azurerm_storage_account.st-weatherbot-blob.name}.blob.core.windows.net/${azurerm_storage_container.appcontainer.name}/weatherbot.zip?${azurerm_storage_account.st-weatherbot-blob.primary_access_key}"
   }
 
   site_config {
     linux_fx_version = "PYTHON|3.10"
   }
 
-  depends_on = [azurerm_storage_account.st-weatherbot, azurerm_app_service_plan.pl-weatherbot]
+  depends_on = [
+    azurerm_storage_account.st-weatherbot,
+    azurerm_storage_account.st-weatherbot-blob,
+    azurerm_app_service_plan.pl-weatherbot
+  ]
 }
 
 output "function_app_url" {
